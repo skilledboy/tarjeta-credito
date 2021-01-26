@@ -442,22 +442,19 @@ EOF
                         def release = "v${APP_VERSION}-${env.BRANCH_NAME}"
 
                         // Credentials
+                        withCredentials([usernamePassword(credentialsId: 'github-push', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                            sh label: "", 
+                            script: """
+                                #!/bin/bash
+                                
+                                git config --local credential.helper "!f() { echo username=\\${GIT_USERNAME}; echo password=\\${GIT_PASSWORD}; }; f"
+                                git tag ${release}
 
-                        sh label: "", 
-                        script: """
-                            #!/bin/bash
-
-                            set +xe
+                                git push --force origin ${release}
                             
-                            git config user.name 'jenkins-job'
-                            git config user.email 'jenkins-job@apiservice.cl'
+                            """
 
-                            git tag ${release}
-                            git push origin ${release}
-                            
-                            # git push https://USER_PUSH:TOKEN@https://github.com/skilledboy/tarjeta-credito.git/
-                        
-                        """
+                        }
                     }
                 }
             }
