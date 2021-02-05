@@ -5,7 +5,8 @@ def jenkinsWorker = 'jenkins-worker'
 def nodeLabel = 'jenkins-job'
 pipeline {
   agent {
-    ${jenkinsWorker} &&
+    label {
+    "${jenkinsWorker}" &&
     kubernetes {
       cloud 'openshift'
       label nodeLabel
@@ -46,6 +47,7 @@ spec:
           name: openshift-login
 """
     }
+  }
   }
     environment {
         APP_NAME = "tarjeta-credito"
