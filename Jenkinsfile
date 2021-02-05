@@ -5,6 +5,7 @@ def jenkinsWorker = 'jenkins-worker'
 def nodeLabel = 'jenkins-job'
 pipeline {
   agent {
+    ${jenkinsWorker} &&
     kubernetes {
       cloud 'openshift'
       label nodeLabel
