@@ -422,24 +422,21 @@ spec:
             }
         }
     }
-    post {
-        agent { 
-            label "${jenkinsWorker}"
-        }
-        success {
-            echo " ==> SUCCES: Pipeline successful."
-        }
-        failure {
-            echo " ==> ERROR: Pipeline failed."
-        }
-        always {
-            // Clean Up
-            script {
-                echo " ==> Cleanup..."
-            }
-            step([$class: 'WsCleanup'])
-        }
-    }
+    // post {
+    //     success {
+    //         echo " ==> SUCCES: Pipeline successful."
+    //     }
+    //     failure {
+    //         echo " ==> ERROR: Pipeline failed."
+    //     }
+    //     always {
+    //         // Clean Up
+    //         script {
+    //             echo " ==> Cleanup..."
+    //         }
+    //         step([$class: 'WsCleanup'])
+    //     }
+    // }
 }
 
 def rollback(){
