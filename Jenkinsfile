@@ -4,7 +4,60 @@ def jenkinsWorker = 'jenkins-worker'
 
 def nodeLabel = 'jenkins-job'
 pipeline {
-    agent none
+  agent {
+    kubernetes {
+      cloud 'openshift'
+      label nodeLabel
+      yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    identifier: ${nodeLabel}
+spec:
+  serviceAccountName: jenkins
+  containers:
+  - name: maven
+    image: 331022218908.dkr.ecr.us-east-1.amazonaws.com/agent-maven:latest # quay.io/openshift/origin-jenkins-agent-maven:latest
+    command:
+    - cat
+    tty: true
+    resources:
+    limits:
+        cpu: 1
+        memory: 1Gi
+    requests:
+        cpu: 0.5
+        memory: 500Mi
+  - name: tools
+    image: 331022218908.dkr.ecr.us-east-1.amazonaws.com/tools:1.0.0 # Clients: aws oc klar 
+    command:
+    - cat
+    tty: true
+    env:
+    - name: USER_OPENSHIFT
+      valueFrom:
+        secretKeyRef:
+          key: USER_OPENSHIFT
+          name: openshift-login
+    - name: PASS_OPENSHIFT
+      valueFrom:
+        secretKeyRef:
+          key: PASS_OPENSHIFT
+          name: openshift-login
+    - name: URL_OPENSHIFT
+      valueFrom:
+        secretKeyRef:
+          key: URL_OPENSHIFT
+          name: openshift-login
+    - name: REGISTRY_OPENSHIFT
+      valueFrom:
+        secretKeyRef:
+          key: REGISTRY_OPENSHIFT
+          name: openshift-login
+"""
+    }
+  }
     environment {
         APP_NAME = "tarjeta-credito"
         APP_VERSION = ""
@@ -369,6 +422,9 @@ pipeline {
             echo " ==> ERROR: Pipeline failed."
         }
         always {
+            agent { 
+                label "${jenkinsWorker}"
+            }
             // Clean Up
             script {
                 echo " ==> Cleanup..."
