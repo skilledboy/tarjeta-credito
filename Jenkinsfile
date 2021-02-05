@@ -1,5 +1,6 @@
 def IMAGEN
 def APP_VERSION
+def jenkinsWorker = 'jenkins-worker'
 
 def nodeLabel = 'jenkins-job'
 pipeline {
@@ -16,18 +17,6 @@ metadata:
 spec:
   serviceAccountName: jenkins
   containers:
-  - name: maven
-    image: 331022218908.dkr.ecr.us-east-1.amazonaws.com/agent-maven:latest # quay.io/openshift/origin-jenkins-agent-maven:latest
-    command:
-    - cat
-    tty: true
-    resources:
-    limits:
-        cpu: 1
-        memory: 1Gi
-    requests:
-        cpu: 0.5
-        memory: 500Mi
   - name: tools
     image: 331022218908.dkr.ecr.us-east-1.amazonaws.com/tools:1.0.0 # Clients: aws oc klar 
     command:
@@ -64,7 +53,6 @@ spec:
         REGISTRY = "331022218908.dkr.ecr.us-east-1.amazonaws.com"
         REPOSITORY = "apiservice"
         PUSH = "${REGISTRY}/${REPOSITORY}"
-        BASE_BUILD_IMAGE = "${REGISTRY}/openshift-s2i:latest" // https://github.com/quarkusio/quarkus-images
         NAMESPACE = "apiservice-microservicios"
     }
     options {
@@ -73,8 +61,8 @@ spec:
     }
     stages {
         stage('Stage: Versioning') {
-            steps {
-                container('tools') {
+            node ("${jenkinsWorker}") {
+                steps {
                     script {
                         // Ref: https://stackoverflow.com/a/54154911/11097939
                         IMAGEN = readMavenPom().getArtifactId()
@@ -83,14 +71,14 @@ spec:
                         echo "Nombre del Artefacto: ${IMAGEN}"
                         echo "Version: ${APP_VERSION}"
 
-                        sh "oc version"
+                        // sh "oc version"
                     }
                 }
-            }
+            }    
         }
         stage('Stage: Environment') {
-            steps {
-                container('tools') {
+            node ("${jenkinsWorker}") {
+                steps {
                     script {
                         // https://stackoverflow.com/a/59585410/11097939
                         def branch = "${env.BRANCH_NAME}"
@@ -117,7 +105,7 @@ spec:
                             // NAMESPACE = 'production'
                             break
                         // Prueba
-                        case "cicd": 
+                        case "feature/jenkins": 
                             AMBIENTE = 'cicd'
                             break
                         default:
@@ -130,8 +118,8 @@ spec:
             }
         }
         stage('Stage: Build'){
-            steps {
-                container('maven') {
+            node ("${jenkinsWorker}") {
+                steps {
                     script {
                         sh 'mvn -s settings.xml clean install -Dmaven.test.skip=true -Dmaven.test.failure.ignore=true -Dquarkus.package.uber-jar=true'
                     }
@@ -139,24 +127,18 @@ spec:
             }
         }
         stage('Stage: Test'){
-            when { 
-                not { 
-                    branch 'master' 
-                }
-            }
-            stages {
-                stage("Unit Test") {
-                    steps {
-                        container('maven') {
+            node ("${jenkinsWorker}") {
+                stages {
+                    stage("Unit Test") {
+                        steps {
                             script {
                                 sh 'mvn -s settings.xml test'
                             }
                         }
+                        
                     }
-                }
-                stage("Code Test") {
-                    steps {
-                        container('maven') {
+                    stage("Code Test") {
+                        steps {
                             script {
                                 withSonarQubeEnv('Sonar') {
                                     echo " --> Sonar Scan"
@@ -165,158 +147,80 @@ spec:
                             }
                         }
                     }
+                    // stage('Kiuwan Test'){
+                    //     steps {
+                    //         container('kiuwan') {
+                    //             script {
+                    //                 echo " --> Kiuwan Scan"
+                    //                 // Ref: https://www.kiuwan.com/docs/display/K5/Jenkins+plugin
+                    //                 kiuwan connectionProfileUuid: 'lYfV-SD13',
+                    //                 sourcePath: 'folder/demo-app-repository',
+                    //                 applicationName: 'Demo application',
+                    //                 indicateLanguages: true,
+                    //                 languages:'java,python',
+                    //                 measure: 'NONE'
+                    //             }
+                    //         }
+                    //     }
+                    // }
                 }
-                // stage('Kiuwan Test'){
-                //     steps {
-                //         container('kiuwan') {
-                //             script {
-                //                 echo " --> Kiuwan Scan"
-                //                 // Ref: https://www.kiuwan.com/docs/display/K5/Jenkins+plugin
-                //                 kiuwan connectionProfileUuid: 'lYfV-SD13',
-                //                 sourcePath: 'folder/demo-app-repository',
-                //                 applicationName: 'Demo application',
-                //                 indicateLanguages: true,
-                //                 languages:'java,python',
-                //                 measure: 'NONE'
-                //             }
-                //         }
-                //     }
-                // }
             }
         }
-        stage('Stage: Package') {
-            steps {
-                container('tools') {
+        stage('Stage: Package') { 
+            node ("${jenkinsWorker}") {
+                steps {
                     script {
-                        openshift.withCluster() {
-                            openshift.withProject() {
-                                if (!openshift.selector("bc", "${APP_NAME}-${AMBIENTE}").exists()){
-                                    echo " --> Creando el BuildConfig..."
-                                    openshift.newBuild("--name=${APP_NAME}-${AMBIENTE}", "--docker-image=${BASE_BUILD_IMAGE}", "--binary", "--labels=app=${APP_NAME}-${AMBIENTE}")
-                                }
-                                else {
-                                    echo " --> El BuildConfig existe ${APP_NAME}-${AMBIENTE}!"
-                                }
-                                
-                                // Validando si el tag del is existe, osea la version
-                                if (!openshift.selector("istag", "${APP_NAME}-${AMBIENTE}:${APP_VERSION}").exists()){
-                                    echo " --> Creando la imagen para la version ${APP_VERSION}"
-                                    def bc = openshift.selector("bc", "${APP_NAME}-${AMBIENTE}").startBuild("--from-file=target/${IMAGEN}-${APP_VERSION}-runner.jar", "--follow", "--wait=true")
-                            
-                                    def result = bc.logs('-f')
-                                    echo "The logs operation require ${result.actions.size()} oc interactions"
-                                    
-                                    echo " --> Tagging"
-                                    // Colocamos el tag latest de la imagen hecha por el build config para la version a desplegar
-                                    openshift.tag("${APP_NAME}-${AMBIENTE}:latest", "${APP_NAME}-${AMBIENTE}:${APP_VERSION}")
-                                }
-                                else {
-                                    echo " --> Esta versión existe ${APP_VERSION}-${AMBIENTE}!"
-                                }
-                            }
-                        }
+                        echo "Docker..."
+                        // docker build
+
+                        // PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
+                        // echo \$PASS | docker login --username AWS --password-stdin https://\${REGISTRY}
+                        // docker tag
+                        // docker push
+                        
                     }
                 }
             }
         }
         stage('Stage: Validate') {
-            when { 
-                not { 
-                    branch 'master' 
+            node ("${jenkinsWorker}") {
+                when { 
+                    not { 
+                        branch 'master' 
+                    }
                 }
-            }
-            stages {
-                stage("Container Scanner") {
-                    steps {
-                        container('tools') {
+                stages {
+                    stage("Container Scanner") {
+                        steps {
                             script {
-                                openshift.withCluster() {
-                                    openshift.withProject() {
-                                        echo "Stage Clair..."                                
-                                        sh label: "", 
-                                        script: """
-                                            #!/bin/bash
+                                echo "Stage Clair..."
+                                sh label: "", 
+                                script: """
+                                    #!/bin/bash
 
-                                            set +xe
-                                            
-                                            # KLAR_TRACE=true
+                                    set +xe
+                                    
+                                    # KLAR_TRACE=true
 
-                                            echo " --> Login al Cluster..."
-                                            oc login -u \$USER_OPENSHIFT -p \$PASS_OPENSHIFT \$URL_OPENSHIFT
-                                            
-                                            echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
-                                            SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=\$(oc whoami) DOCKER_PASSWORD=\$(oc whoami -t) JSON_OUTPUT=true klar \$REGISTRY_OPENSHIFT/${NAMESPACE}/${APP_NAME}-${AMBIENTE}:${APP_VERSION} )
-                                            
-                                            RESULT=\$( echo \$SCAN | jq -r ".Vulnerabilities | .[] | .[] | .Severity" | grep -e Critical -e High )
-                                            if [ "\$RESULT" == "" ]; then
-                                                echo " --> Success! Imagen sin vulnerabilidades Critical ó High"
-                                            elif [ "\$RESULT" =! "" ]; then
-                                                echo " --> Error! Imagen con vulnerabilidades Critical ó High"
-                                                echo " --> Scan: \$SCAN"
-                                                exit 1
-                                            else
-                                                echo " --> Error! \$SCAN"
-                                            fi
+                                    echo " --> Login al ECR..."
+                                    PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
 
-                                        """
-                                        
-                                        // BuildConfig para push para ECR
-                                        def push = "${APP_NAME}-${AMBIENTE}-push"
-                                        if (openshift.selector("bc", "${push}").exists()) {
-                                            openshift.selector("bc", "${push}").delete()
-                                        }
-                                        echo " --> Push Image ${APP_NAME}-${AMBIENTE}:${APP_VERSION} to registry ${PUSH}..."
-                                        sh label: "", 
-                                        script: """
-                                            #!/bin/sh
-                                            
-                                            set +xe
-                                            
-                                            echo " --> APP_NAME: ${APP_NAME}"
-                                            echo " --> APP_VERSION: ${APP_VERSION}"
-                                            echo " --> PUSH: ${PUSH}"
+                                    echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
+                                    SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${REGISTRY}/${NAMESPACE}/${APP_NAME}-${AMBIENTE}:${APP_VERSION} )
+                                    
+                                    RESULT=\$( echo \$SCAN | jq -r ".Vulnerabilities | .[] | .[] | .Severity" | grep -e Critical -e High )
+                                    if [ "\$RESULT" == "" ]; then
+                                        echo " --> Success! Imagen sin vulnerabilidades Critical ó High"
+                                    elif [ "\$RESULT" =! "" ]; then
+                                        echo " --> Error! Imagen con vulnerabilidades Critical ó High"
+                                        echo " --> Scan: \$SCAN"
+                                        exit 1
+                                    else
+                                        echo " --> Error! \$SCAN"
+                                    fi
 
-                                            oc create -f - <<-EOF
-kind: BuildConfig
-apiVersion: build.openshift.io/v1
-metadata:
-    labels:
-    app: ${APP_NAME}-${AMBIENTE}
-    name: ${APP_NAME}-${AMBIENTE}-push
-spec:
-    source:
-        type: Binary
-        binary: {}
-    strategy:
-        type: Source
-        sourceStrategy:
-            from:
-                kind: ImageStreamTag
-                name: "${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
-    output:
-        to:
-            kind: "DockerImage"
-            name: "${PUSH}:${APP_VERSION}"
-        pushSecret:
-            name: aws-registry
-EOF
-
-                                        """
-                                        
-                                        // Push image to private registry
-                                        def bc = openshift.selector("bc", "${push}").startBuild("--follow", "--wait=true")
-                                        def result = bc.logs('-f')
-                                        echo "The logs operation require ${result.actions.size()} oc interactions"
-                                        
-                                        echo " --> Se hizo push de la versión ${APP_NAME}-${AMBIENTE}:$APP_VERSION!"
-
-                                        // Cleanup BuildConfig after push
-                                        if (openshift.selector("bc", "${push}").exists()) {
-                                            echo " --> Eliminando el BuildConfig del Push ${push}..."
-                                            openshift.selector("bc", "${push}").delete()
-                                        }
-                                    }
-                                }
+                                """
+     
                             }
                         }
                     }
@@ -410,7 +314,7 @@ EOF
                 }
             }
             steps {
-                container('mavem') {
+                container('tools') {
                     script {
                         echo " --> Cucumber Test..."
                         // sh "mvn functional-test"
@@ -435,8 +339,8 @@ EOF
             }
         }
         stage('Stage: Release') {
-            steps {
-                container('tools') {
+            node ("${jenkinsWorker}") {
+                steps {
                     script {
                         echo " --> Release..."
                         def release = "v${APP_VERSION}-${env.BRANCH_NAME}"
