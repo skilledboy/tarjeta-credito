@@ -173,16 +173,29 @@ spec:
             steps {
                 script {
                     echo "Docker Build..."
-                    sh "docker build -t ${APP_NAME}:${APP_VERSION} ."
-                    // sh "./mvnw package -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=docker -Dquarkus.container-image.build=true -s settings.xml"
-                    // docker build -f src/main/docker/Dockerfile.native -t hola .
-                    // ./mvnw -s settings.xml clean package -Pnative -Dmaven.test.skip=true -Dmaven.test.failure.ignore=true -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=docker -Dquarkus.container-image.build=true
-                    // PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
-                    // echo \$PASS | docker login --username AWS --password-stdin https://\${REGISTRY}
-                    // docker tag
+                    sh "docker build -f src/main/docker/Dockerfile.native -t ${APP_NAME}-${AMBIENTE}:${APP_VERSION} ."
+                    
                     echo "Docker Tag..."
-                    // docker push
+                    sh "docker tag ${APP_NAME}-${AMBIENTE}:${APP_VERSION} ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
+
                     echo "Docker Push..."
+                    sh label: "",
+                        script: """
+                            #!/bin/bash
+
+                            set +xe
+                            
+                            echo " --> Login al Cluster..."
+                            oc login -u \$USER_OPENSHIFT -p \$PASS_OPENSHIFT \$URL_OPENSHIFT
+
+                            PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
+                            
+                            echo " --> Login al Registry..."
+                            echo \$PASS | docker login --username AWS --password-stdin https://\${REGISTRY}
+
+                        """
+
+                    sh "docker push ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
                     sh "exit 0"
 
                 }
@@ -202,7 +215,7 @@ spec:
                     steps {
                         script {
                             echo "Stage Clair..."
-                            sh label: "", 
+                            sh label: "",
                             script: """
                                 #!/bin/bash
 
@@ -210,11 +223,13 @@ spec:
                                 
                                 # KLAR_TRACE=true
 
-                                echo " --> Login al ECR..."
+                                echo " --> Login al Cluster..."
+                                oc login -u \$USER_OPENSHIFT -p \$PASS_OPENSHIFT \$URL_OPENSHIFT
+                                
                                 PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
 
                                 echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
-                                SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${REGISTRY}/${NAMESPACE}/${APP_NAME}-${AMBIENTE}:${APP_VERSION} )
+                                SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION} )
                                 
                                 RESULT=\$( echo \$SCAN | jq -r ".Vulnerabilities | .[] | .[] | .Severity" | grep -e Critical -e High )
                                 if [ "\$RESULT" == "" ]; then
@@ -245,9 +260,11 @@ spec:
                                     
                                     // DeploymemtConfig
                                     echo " --> Deploy..."
+                                    def app = openshift.newApp("--file=./k8s/template.yaml", "--param=APP_NAME=${APP_NAME}-${AMBIENTE}", "--param=APP_VERSION=${APP_VERSION}", "--param=AMBIENTE=${AMBIENTE}", "--param=REGISTRY=${PUSH}" )
+                                    
                                     // Ref: https://stackoverflow.com/a/65156451/11097939
                                     
-                                    def app = openshift.newApp("--docker-image=${PUSH}:${APP_VERSION}", "--name=${APP_NAME}-${AMBIENTE}", "--env=AMBIENTE=${AMBIENTE}", "--as-deployment-config=true", "--show-all=true").narrow('svc').expose()
+                                    // def app = openshift.newApp("--docker-image=${PUSH}:${APP_VERSION}", "--name=${APP_NAME}-${AMBIENTE}", "--env=AMBIENTE=${AMBIENTE}", "--as-deployment-config=true", "--show-all=true").narrow('svc').expose()
                             
                                     def dc = openshift.selector("dc", "${APP_NAME}-${AMBIENTE}")
                                     while (dc.object().spec.replicas != dc.object().status.availableReplicas) {
