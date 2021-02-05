@@ -17,18 +17,6 @@ metadata:
 spec:
   serviceAccountName: jenkins
   containers:
-  - name: maven
-    image: 331022218908.dkr.ecr.us-east-1.amazonaws.com/agent-maven:latest # quay.io/openshift/origin-jenkins-agent-maven:latest
-    command:
-    - cat
-    tty: true
-    resources:
-    limits:
-        cpu: 1
-        memory: 1Gi
-    requests:
-        cpu: 0.5
-        memory: 500Mi
   - name: tools
     image: 331022218908.dkr.ecr.us-east-1.amazonaws.com/tools:1.0.0 # Clients: aws oc klar 
     command:
@@ -133,7 +121,7 @@ spec:
             }
             steps {
                 script {
-                    sh 'mvn -s settings.xml clean install -Dmaven.test.skip=true -Dmaven.test.failure.ignore=true -Dquarkus.package.uber-jar=true'
+                    sh './mvnw -s settings.xml clean package -Pnative -Dmaven.test.skip=true -Dmaven.test.failure.ignore=true -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=docker -Dquarkus.container-image.build=true'
                 }
             }
         }
@@ -145,7 +133,7 @@ spec:
                 stage("Unit Test") {
                     steps {
                         script {
-                            sh 'mvn -s settings.xml test'
+                            sh './mvnw -s settings.xml test'
                         }
                     }
                     
@@ -155,7 +143,7 @@ spec:
                         script {
                             withSonarQubeEnv('Sonar') {
                                 echo " --> Sonar Scan"
-                                sh "mvn -s settings.xml org.sonarsource.scanner.maven:sonar-maven-plugin:3.7.0.1746:sonar -Dsonar.projectKey=${APP_NAME}-${AMBIENTE} -Dsonar.projectName=${APP_NAME}-${AMBIENTE} -Dsonar.projectVersion=${APP_VERSION} -Dproject.settings=sonar/maven-sonar-project.properties"
+                                sh "./mvnw -s settings.xml org.sonarsource.scanner.maven:sonar-maven-plugin:3.7.0.1746:sonar -Dsonar.projectKey=${APP_NAME}-${AMBIENTE} -Dsonar.projectName=${APP_NAME}-${AMBIENTE} -Dsonar.projectVersion=${APP_VERSION} -Dproject.settings=sonar/maven-sonar-project.properties"
                             }
                         }
                     }
@@ -184,14 +172,19 @@ spec:
             }
             steps {
                 script {
-                    echo "Docker..."
-                    // docker build
-
+                    echo "Docker Build..."
+                    sh "docker build -t ${APP_NAME}:${APP_VERSION} ."
+                    // sh "./mvnw package -Pnative -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=docker -Dquarkus.container-image.build=true -s settings.xml"
+                    // docker build -f src/main/docker/Dockerfile.native -t hola .
+                    // ./mvnw -s settings.xml clean package -Pnative -Dmaven.test.skip=true -Dmaven.test.failure.ignore=true -Dquarkus.native.container-build=true -Dquarkus.native.container-runtime=docker -Dquarkus.container-image.build=true
                     // PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
                     // echo \$PASS | docker login --username AWS --password-stdin https://\${REGISTRY}
                     // docker tag
+                    echo "Docker Tag..."
                     // docker push
-                    
+                    echo "Docker Push..."
+                    sh "exit 0"
+
                 }
             }
         }
