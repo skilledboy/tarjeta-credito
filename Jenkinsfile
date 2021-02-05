@@ -73,9 +73,7 @@ spec:
     }
     stages {
         stage('Stage: Versioning') {
-            agent { 
-                label "${jenkinsWorker}"
-            }
+            agent any
             steps {
                 script {
                     // Ref: https://stackoverflow.com/a/54154911/11097939
@@ -90,9 +88,7 @@ spec:
             }
         }
         stage('Stage: Environment') {
-            agent { 
-                label "${jenkinsWorker}"
-            }
+            agent any
             steps {
                 script {
                     // https://stackoverflow.com/a/59585410/11097939
@@ -422,21 +418,23 @@ spec:
             }
         }
     }
-    // post {
-    //     success {
-    //         echo " ==> SUCCES: Pipeline successful."
-    //     }
-    //     failure {
-    //         echo " ==> ERROR: Pipeline failed."
-    //     }
-    //     always {
-    //         // Clean Up
-    //         script {
-    //             echo " ==> Cleanup..."
-    //         }
-    //         step([$class: 'WsCleanup'])
-    //     }
-    // }
+    post {
+        success {
+            echo " ==> SUCCES: Pipeline successful."
+        }
+        failure {
+            echo " ==> ERROR: Pipeline failed."
+        }
+        always {
+            node("${jenkinsWorker}") {
+                // Clean Up
+                script {
+                    echo " ==> Cleanup..."
+                }
+                step([$class: 'WsCleanup'])
+            }
+        }
+    }
 }
 
 def rollback(){
