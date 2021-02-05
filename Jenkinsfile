@@ -6,7 +6,7 @@ def nodeLabel = 'jenkins-job'
 pipeline {
     agent {
         label {
-           "${jenkinsWorker}"
+           'jenkins-worker'
         }
     }
     environment {
