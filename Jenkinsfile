@@ -7,6 +7,7 @@ pipeline {
     agent {
         label {
            "${jenkinsWorker}"
+        }
     }
     environment {
         APP_NAME = "tarjeta-credito"
