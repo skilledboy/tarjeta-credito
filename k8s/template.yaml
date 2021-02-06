@@ -3,24 +3,24 @@ kind: Template
 metadata:
   annotations:
     description: OpenShift template
-    tags: "instant-app,app"
-  name: app
+    tags: "instant-${APP_NAME},${APP_NAME}"
+  name: ${APP_NAME}
 objects:
   - apiVersion: v1
     kind: Service
     metadata:
       labels:
-        app: app
-      name: app
+        app: ${APP_NAME}
+      name: ${APP_NAME}
     spec:
       ports:
-        - name: app
+        - name: ${APP_NAME}
           port: 8080
           protocol: TCP
           targetPort: 8080
       selector:
-        app: app
-        deploymentconfig: app
+        app: ${APP_NAME}
+        deploymentconfig: ${APP_NAME}
       sessionAffinity: None
       type: ClusterIP
   - apiVersion: v1
@@ -29,28 +29,28 @@ objects:
       annotations:
         description: Route http service.
       labels:
-        app: app
-      name: app
+        app: ${APP_NAME}
+      name: ${APP_NAME}
     spec:
       port:
-        targetPort: app
+        targetPort: ${APP_NAME}
       tls:
         termination: edge
       to:
         kind: Service
-        name: app
+        name: ${APP_NAME}
   - apiVersion: v1
     kind: DeploymentConfig
     metadata:
       labels:
-        app: app
-        deploymentconfig: app
-      name: app
+        app: ${APP_NAME}
+        deploymentconfig: ${APP_NAME}
+      name: ${APP_NAME}
     spec:
       replicas: 1
       selector:
-        app: app
-        deploymentconfig: app
+        app: ${APP_NAME}
+        deploymentconfig: ${APP_NAME}
       strategy:
         resources: {}
         rollingParams:
@@ -64,8 +64,8 @@ objects:
         metadata:
           creationTimestamp: null
           labels:
-            app: app
-            deploymentconfig: app
+            app: ${APP_NAME}
+            deploymentconfig: ${APP_NAME}
         spec:
           containers:
             - env:
@@ -86,7 +86,7 @@ objects:
                 periodSeconds: 20
                 successThreshold: 1
                 timeoutSeconds: 5
-              name: app
+              name: ${APP_NAME}
               ports:
                 - containerPort: 8080
                   protocol: TCP
