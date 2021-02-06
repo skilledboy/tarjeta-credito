@@ -156,7 +156,7 @@ spec:
                     sh "docker build -f src/main/docker/Dockerfile.native -t ${APP_NAME}-${AMBIENTE}:${APP_VERSION} ."
                     
                     echo "Docker Tag..."
-                    sh "docker tag ${APP_NAME}-${AMBIENTE}:${APP_VERSION} ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
+                    sh "docker tag ${APP_NAME}-${AMBIENTE}:${APP_VERSION} ${PUSH}:${APP_VERSION}-${AMBIENTE}"
 
                     echo "Docker Push..."
                     // Credentials
@@ -178,7 +178,7 @@ spec:
                             """
                     }
 
-                    sh "docker push ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
+                    sh "docker push ${PUSH}:${APP_VERSION}-${AMBIENTE}"
 
                 }
             }
@@ -208,7 +208,7 @@ spec:
                                 PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
 
                                 echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
-                                SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION} )
+                                SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${PUSH}:${APP_VERSION}-${AMBIENTE} )
                                 
                                 RESULT=\$( echo \$SCAN | jq -r ".Vulnerabilities | .[] | .[] | .Severity" | grep -e Critical -e High )
                                 if [ "\$RESULT" == "" ]; then
@@ -239,7 +239,7 @@ spec:
                                     
                                     // DeploymemtConfig
                                     echo " --> Deploy..."
-                                    def app = openshift.newApp("--file=./k8s/template.yaml", "--param=APP_NAME=${APP_NAME}-${AMBIENTE}", "--param=APP_VERSION=${APP_VERSION}", "--param=AMBIENTE=${AMBIENTE}", "--param=REGISTRY=${PUSH}" )
+                                    def app = openshift.newApp("--file=./k8s/template.yaml", "--param=APP_NAME=${APP_NAME}-${AMBIENTE}", "--param=APP_VERSION=${APP_VERSION}", "--param=AMBIENTE=${AMBIENTE}", "--param=REGISTRY=${PUSH}:${APP_VERSION}-${AMBIENTE}" )
                                     
                                     // Ref: https://stackoverflow.com/a/65156451/11097939
                                     

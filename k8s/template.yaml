@@ -75,7 +75,7 @@ objects:
                   value: "${APP_VERSION}"
                 - name: AMBIENTE
                   value: "${AMBIENTE}"
-              image: "${REGISTRY}/${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
+              image: "${REGISTRY}"
               imagePullPolicy: IfNotPresent
               livenessProbe:
                 failureThreshold: 3
