@@ -184,9 +184,6 @@ spec:
             }
         }
         stage('Stage: Validate') {
-            agent { 
-                label "${jenkinsWorker}"
-            }
             when { 
                 not { 
                     branch 'master' 
