@@ -22,27 +22,6 @@ spec:
     command:
     - cat
     tty: true
-    env:
-    - name: USER_OPENSHIFT
-      valueFrom:
-        secretKeyRef:
-          key: USER_OPENSHIFT
-          name: openshift-login
-    - name: PASS_OPENSHIFT
-      valueFrom:
-        secretKeyRef:
-          key: PASS_OPENSHIFT
-          name: openshift-login
-    - name: URL_OPENSHIFT
-      valueFrom:
-        secretKeyRef:
-          key: URL_OPENSHIFT
-          name: openshift-login
-    - name: REGISTRY_OPENSHIFT
-      valueFrom:
-        secretKeyRef:
-          key: REGISTRY_OPENSHIFT
-          name: openshift-login
 """
     }
   }
@@ -54,6 +33,7 @@ spec:
         REPOSITORY = "apiservice"
         PUSH = "${REGISTRY}/${REPOSITORY}"
         NAMESPACE = "apiservice-microservicios"
+        URL_OPENSHIFT = "https://api.dinersclub-dev.b6r7.p1.openshiftapps.com:6443"
     }
     options {
         timestamps ()
@@ -179,24 +159,26 @@ spec:
                     sh "docker tag ${APP_NAME}-${AMBIENTE}:${APP_VERSION} ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
 
                     echo "Docker Push..."
-                    sh label: "",
-                        script: """
-                            #!/bin/bash
+                    // Credentials
+                    withCredentials([usernamePassword(credentialsId: 'openshift-login', usernameVariable: 'USER_OPENSHIFT', passwordVariable: 'PASS_OPENSHIFT')]) {
+                        sh label: "",
+                            script: """
+                                #!/bin/bash
 
-                            set +xe
-                            
-                            echo " --> Login al Cluster..."
-                            oc login -u \$USER_OPENSHIFT -p \$PASS_OPENSHIFT \$URL_OPENSHIFT
+                                set +xe
+                                
+                                echo " --> Login al Cluster..."
+                                oc login -u \$USER_OPENSHIFT -p \$PASS_OPENSHIFT ${URL_OPENSHIFT}
 
-                            PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
-                            
-                            echo " --> Login al Registry..."
-                            echo \$PASS | docker login --username AWS --password-stdin https://\${REGISTRY}
+                                PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
+                                
+                                echo " --> Login al Registry..."
+                                echo \$PASS | docker login --username AWS --password-stdin https://${REGISTRY}
 
-                        """
+                            """
+                    }
 
                     sh "docker push ${PUSH}/${APP_NAME}-${AMBIENTE}:${APP_VERSION}"
-                    sh "exit 0"
 
                 }
             }
@@ -222,10 +204,7 @@ spec:
                                 set +xe
                                 
                                 # KLAR_TRACE=true
-
-                                echo " --> Login al Cluster..."
-                                oc login -u \$USER_OPENSHIFT -p \$PASS_OPENSHIFT \$URL_OPENSHIFT
-                                
+                              
                                 PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
 
                                 echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
