@@ -197,32 +197,36 @@ spec:
                     steps {
                         container('tools') {
                             script {
-                                echo "Stage Clair..."
-                                sh label: "",
-                                script: """
-                                    #!/bin/bash
+                                openshift.withCluster() {
+                                    openshift.withProject() {
+                                        echo "Stage Clair..."
+                                        sh label: "",
+                                        script: """
+                                            #!/bin/bash
 
-                                    set +xe
-                                    
-                                    # KLAR_TRACE=true
-                                
-                                    PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
+                                            set +xe
+                                            
+                                            # KLAR_TRACE=true
+                                        
+                                            PASS=\$( oc get secrets/aws-registry -o=go-template='{{index .data ".dockerconfigjson"}}' | base64 -d | jq -r ".[] | .[] | .password" )
 
-                                    echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
-                                    SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${PUSH}:${APP_VERSION}-${AMBIENTE} )
-                                    
-                                    RESULT=\$( echo \$SCAN | jq -r ".Vulnerabilities | .[] | .[] | .Severity" | grep -e Critical -e High )
-                                    if [ "\$RESULT" == "" ]; then
-                                        echo " --> Success! Imagen sin vulnerabilidades Critical ó High"
-                                    elif [ "\$RESULT" =! "" ]; then
-                                        echo " --> Error! Imagen con vulnerabilidades Critical ó High"
-                                        echo " --> Scan: \$SCAN"
-                                        exit 1
-                                    else
-                                        echo " --> Error! \$SCAN"
-                                    fi
+                                            echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
+                                            SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${PUSH}:${APP_VERSION}-${AMBIENTE} )
+                                            
+                                            RESULT=\$( echo \$SCAN | jq -r ".Vulnerabilities | .[] | .[] | .Severity" | grep -e Critical -e High )
+                                            if [ "\$RESULT" == "" ]; then
+                                                echo " --> Success! Imagen sin vulnerabilidades Critical ó High"
+                                            elif [ "\$RESULT" =! "" ]; then
+                                                echo " --> Error! Imagen con vulnerabilidades Critical ó High"
+                                                echo " --> Scan: \$SCAN"
+                                                exit 1
+                                            else
+                                                echo " --> Error! \$SCAN"
+                                            fi
 
-                                """
+                                        """
+                                    }
+                                }        
                             }
                         }
                     }
