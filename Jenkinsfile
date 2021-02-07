@@ -210,6 +210,9 @@ spec:
                                             echo " --> Scanning image ${APP_NAME}-${AMBIENTE}:${APP_VERSION}..."
                                             SCAN=\$( CLAIR_ADDR=http://\$(oc get svc -l app=clair | awk '{print \$1}' | tail -1):6060 DOCKER_USER=AWS DOCKER_PASSWORD=\$PASS JSON_OUTPUT=true klar ${PUSH}:${APP_VERSION}-${AMBIENTE} )
                                             
+                                            echo " --> Resultado del Scan: \$SCAN"
+
+                                            echo " --> Validando el Scan..."
                                             RESULT=\$( echo \$SCAN | jq -r ".Vulnerabilities | .[] | .[] | .Severity" | grep -e Critical -e High )
                                             if [ "\$RESULT" == "" ]; then
                                                 echo " --> Success! Imagen sin vulnerabilidades Critical ó High"
@@ -421,6 +424,7 @@ spec:
                 // Clean Up
                 script {
                     echo " ==> Cleanup..."
+                    sh "docker rmi -f \$( docker images | grep none | awk '{print \$3}' )"
                 }
                 step([$class: 'WsCleanup'])
             }
@@ -430,12 +434,6 @@ spec:
 
 def rollback(){
     echo " --> Rollback..."
-    
-    // sh label: "", 
-    //     script: """
-    //         #!/bin/sh
-    //         REVISION=\$( oc rollout history dc ${APP_NAME}-${AMBIENTE} | grep Complete | awk '{print \$1}' | tail -1 | awk '{print \$0-1}'  )
-    // """
     
     REVISION = sh (script: "oc rollout history dc ${APP_NAME}-${AMBIENTE} | grep Complete | awk '{print \$1}' | tail -1 | awk '{print \$0-1}'", returnStdout:true).trim()
 
