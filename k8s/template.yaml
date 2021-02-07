@@ -111,6 +111,8 @@ objects:
           restartPolicy: Always
           securityContext: {}
           terminationGracePeriodSeconds: 30
+      triggers:
+      - type: ConfigChange
 
 parameters:
   - displayName: App name

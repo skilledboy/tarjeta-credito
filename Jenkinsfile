@@ -424,7 +424,7 @@ spec:
                 // Clean Up
                 script {
                     echo " ==> Cleanup..."
-                    sh "docker rmi -f \$( docker images | grep none | awk '{print \$3}' )"
+                    sh "docker rmi -f \$( docker images | grep none | awk '{print \$3}' ) || true"
                 }
                 step([$class: 'WsCleanup'])
             }
