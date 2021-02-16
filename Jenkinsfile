@@ -256,7 +256,7 @@ spec:
                                     }
                                     // 
 
-                                    openshift.set("triggers", "dc/${APP_NAME}-${AMBIENTE}", "--manual")
+                                    // openshift.set("triggers", "dc/${APP_NAME}-${AMBIENTE}", "--manual")
                                     echo " --> Desployed $APP_NAME!"
                                 }
                                 else {
